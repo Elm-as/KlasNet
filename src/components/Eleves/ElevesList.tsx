@@ -4,12 +4,10 @@ import Button from '../UI/Button';
 import { db } from '../../utils/database';
 import { formatNomPrenoms } from '../../utils/formatName';
 import { useToast } from '../Layout/ToastProvider';
-import { Eleve, Classe, Enseignant } from '../../types';
-// types not used here: FraisScolaire, Paiement
+import { Eleve, Classe, Enseignant, Paiement } from '../../types';
 import EnteteFiche from '../EnteteFiche';
 import { getEnteteConfig } from '../../utils/entetesConfig';
-// isEleveInscrit not used here
-import { echeancesManager } from '../../utils/echeancesManager';
+import { financialCache } from '../../utils/financialCache';
 import ModuleContainer from '../Layout/ModuleContainer';
 
 interface ElevesListProps {
@@ -164,33 +162,38 @@ export default function ElevesList({ onEleveSelect, onNewEleve }: ElevesListProp
     a.click();
     window.URL.revokeObjectURL(url);
   };
-  // Calcul du statut financier
-  function getStatutFinancier(eleve: Eleve): 'Payé' | 'Partiel' | 'Impayé' | 'Non défini' {
-    try {
-      const situation = echeancesManager.getSituationEcheances(eleve.id);
-      if (!situation) return 'Non défini';
+  // Calcul du statut financier avec cache
+  const getStatutFinancier = useMemo(() => {
+    const paiements = db.getAll<Paiement>('paiements');
+    const paiementsCount = paiements.length;
 
-      // If protege -> consider only inscription (modalite === 1)
-      if (situation.eleve && situation.eleve.protege) {
-        const ins = (situation.echeances || []).filter((e: any) => e.modalite === 1);
-        const totalDuIns = ins.reduce((sum: number, e: any) => sum + (e.montant || 0), 0);
-        const totalPayeIns = ins.reduce((sum: number, e: any) => sum + (e.montantPaye || 0), 0);
-        if (totalDuIns > 0 && totalPayeIns >= totalDuIns) return 'Payé';
-        if (totalPayeIns > 0 && totalPayeIns < totalDuIns) return 'Partiel';
+    return (eleve: Eleve): 'Payé' | 'Partiel' | 'Impayé' | 'Non défini' => {
+      try {
+        const situation = financialCache.getSituationEcheances(eleve.id, paiementsCount);
+        if (!situation) return 'Non défini';
+
+        // If protege -> consider only inscription (modalite === 1)
+        if (situation.eleve && situation.eleve.protege) {
+          const ins = (situation.echeances || []).filter((e: any) => e.modalite === 1);
+          const totalDuIns = ins.reduce((sum: number, e: any) => sum + (e.montant || 0), 0);
+          const totalPayeIns = ins.reduce((sum: number, e: any) => sum + (e.montantPaye || 0), 0);
+          if (totalDuIns > 0 && totalPayeIns >= totalDuIns) return 'Payé';
+          if (totalPayeIns > 0 && totalPayeIns < totalDuIns) return 'Partiel';
+          return 'Impayé';
+        }
+
+        const totalDu = situation.totalDu || 0;
+        const totalPaye = situation.totalPaye || 0;
+        if (totalDu === 0) return 'Non défini';
+        if (totalPaye >= totalDu) return 'Payé';
+        if (totalPaye > 0 && totalPaye < totalDu) return 'Partiel';
         return 'Impayé';
+      } catch (err) {
+        console.warn('Unable to compute financial status for', eleve.id, err);
+        return 'Non défini';
       }
-
-      const totalDu = situation.totalDu || 0;
-      const totalPaye = situation.totalPaye || 0;
-      if (totalDu === 0) return 'Non défini';
-      if (totalPaye >= totalDu) return 'Payé';
-      if (totalPaye > 0 && totalPaye < totalDu) return 'Partiel';
-      return 'Impayé';
-    } catch (err) {
-      console.warn('Unable to compute financial status for', eleve.id, err);
-      return 'Non défini';
-    }
-  }
+    };
+  }, []);  // Ne recalculer que si la liste de paiements change
 
   function getStatutFinancierColor(statut: string) {
     switch (statut) {
@@ -210,7 +213,10 @@ export default function ElevesList({ onEleveSelect, onNewEleve }: ElevesListProp
   const [, setReloadKey] = useState(0);
 
   useEffect(() => {
-    const onDataChanged = () => setReloadKey(k => k + 1);
+    const onDataChanged = () => {
+      financialCache.invalidateAll();
+      setReloadKey(k => k + 1);
+    };
     window.addEventListener('dataChanged', onDataChanged as EventListener);
     return () => window.removeEventListener('dataChanged', onDataChanged as EventListener);
   }, []);

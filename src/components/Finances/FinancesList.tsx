@@ -440,12 +440,62 @@ export default function FinancesList() {
                 </table>
               </div>
             </div>
+            <div className="mt-4">
+              <h4 className="font-semibold">Échéances & Statut</h4>
+              <div className="max-h-40 overflow-auto mt-2">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border px-2 py-1">Modalité</th>
+                      <th className="border px-2 py-1">Date</th>
+                      <th className="border px-2 py-1">Attendu</th>
+                      <th className="border px-2 py-1">Payé</th>
+                      <th className="border px-2 py-1">Reste</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const ele = eleves.find(e => e.id === elevePaiement);
+                      if (!ele) return null;
+                      const frais = getFraisForEleve(ele) as any;
+                      if (!frais || !(frais.echeances || []).length) return <tr><td colSpan={5} className="text-gray-500 text-center py-2">Aucune échéance configurée</td></tr>;
+                      return (frais.echeances || []).map((ech: any) => {
+                        const modal = Number(ech.modalite || 0);
+                        const attendu = Number(ech.montant || 0);
+                        const paye = getSommeParModalite(elevePaiement!, modal);
+                        const reste = Math.max(0, attendu - paye);
+                        const status = reste === 0 ? 'paid' : (paye > 0 ? 'partial' : 'unpaid');
+                        const statusColor = status === 'paid' ? 'bg-green-100 text-green-800' : (status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700');
+                        return (
+                          <tr key={modal}>
+                            <td className="border px-2 py-1">{modal}</td>
+                            <td className="border px-2 py-1">{ech.date}</td>
+                            <td className="border px-2 py-1">{attendu.toLocaleString('fr-FR')} FCFA</td>
+                            <td className="border px-2 py-1">{paye.toLocaleString('fr-FR')} FCFA</td>
+                            <td className="border px-2 py-1 flex items-center justify-between">
+                              <span>{reste.toLocaleString('fr-FR')} FCFA</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-xs ${statusColor}`}>{status === 'paid' ? 'Payé' : (status === 'partial' ? 'Partiel' : 'Non payé')}</span>
+                                <button className="text-sm px-2 py-1 bg-blue-600 text-white rounded" onClick={() => handleReglerEcheance(modal, reste)}>Régler</button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
         {/* Modal sélecteur de reçus */}
-            {showRecuPicker && (
-              <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-40">
-                <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
-                  <h3 className="text-lg font-semibold mb-3">Sélectionner les reçus à imprimer</h3>
+      {showRecuPicker && elevePaiement && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
+            <h3 className="text-lg font-semibold mb-3">Sélectionner les reçus à imprimer</h3>
                   <div className="text-sm text-gray-600 mb-2">Choisissez une ou plusieurs opérations (cocher). Vous pouvez imprimer séparément ou combiner les paiements sélectionnés en un seul reçu.</div>
                   <div className="max-h-64 overflow-auto border rounded p-2 mb-4">
                     <table className="w-full text-sm">
@@ -521,59 +571,9 @@ export default function FinancesList() {
                       setShowRecuPicker(false);
                       setTimeout(()=>{ openPrintPreviewFromElementId(containerId, `Reçus ${elevePaiement}`); setTimeout(()=>{ const d=document.getElementById(containerId); if (d) d.remove(); },2000); }, 200);
                     }}>Imprimer sélection</button>
-                  </div>
                 </div>
               </div>
-            )}
-            <div className="mt-4">
-              <h4 className="font-semibold">Échéances & Statut</h4>
-              <div className="max-h-40 overflow-auto mt-2">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr>
-                      <th className="border px-2 py-1">Modalité</th>
-                      <th className="border px-2 py-1">Date</th>
-                      <th className="border px-2 py-1">Attendu</th>
-                      <th className="border px-2 py-1">Payé</th>
-                      <th className="border px-2 py-1">Reste</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const ele = eleves.find(e => e.id === elevePaiement);
-                      if (!ele) return null;
-                      const frais = getFraisForEleve(ele) as any;
-                      if (!frais || !(frais.echeances || []).length) return <tr><td colSpan={5} className="text-gray-500 text-center py-2">Aucune échéance configurée</td></tr>;
-                      return (frais.echeances || []).map((ech: any) => {
-                        const modal = Number(ech.modalite || 0);
-                        const attendu = Number(ech.montant || 0);
-                        const paye = getSommeParModalite(elevePaiement!, modal);
-                        const reste = Math.max(0, attendu - paye);
-                        const status = reste === 0 ? 'paid' : (paye > 0 ? 'partial' : 'unpaid');
-                        const statusColor = status === 'paid' ? 'bg-green-100 text-green-800' : (status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700');
-                        return (
-                          <tr key={modal}>
-                            <td className="border px-2 py-1">{modal}</td>
-                            <td className="border px-2 py-1">{ech.date}</td>
-                            <td className="border px-2 py-1">{attendu.toLocaleString('fr-FR')} FCFA</td>
-                            <td className="border px-2 py-1">{paye.toLocaleString('fr-FR')} FCFA</td>
-                            <td className="border px-2 py-1 flex items-center justify-between">
-                              <span>{reste.toLocaleString('fr-FR')} FCFA</span>
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-0.5 rounded text-xs ${statusColor}`}>{status === 'paid' ? 'Payé' : (status === 'partial' ? 'Partiel' : 'Non payé')}</span>
-                                <button className="text-sm px-2 py-1 bg-blue-600 text-white rounded" onClick={() => handleReglerEcheance(modal, reste)}>Régler</button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
-              </div>
             </div>
-          </div>
-        </div>
       )}
 
       {showPaymentModal && (
@@ -596,4 +596,7 @@ export default function FinancesList() {
       {/* Zone imprimable */}
       <div id="print-area" className="hidden print:block bg-white p-4 mb-4 print-compact">
         <EnteteFiche type="recu" libelle="Relevé des paiements" />
-        {/* Header hors-table sous forme de table
+      </div>
+    </div>
+  );
+}
