@@ -1,0 +1,546 @@
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Search, Plus, DollarSign, FileText, AlertTriangle, Printer, TrendingUp, Users, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
+import { db } from '../../utils/database';
+import { formatNomPrenoms } from '../../utils/formatName';
+import { Eleve, Classe, Paiement, FraisScolaire } from '../../types';
+import { useToast } from '../Layout/ToastProvider';
+import PaymentForm from './PaymentForm';
+import RecuPaiement from './RecuPaiement';
+import CombinedRecu from './CombinedRecu';
+import Convocation from './Convocation';
+import { FinanceStatsCards } from './EnhancedStatsCard';
+import ProgressBar from '../UI/ProgressBar';
+import { computeScheduleForEleve } from '../../utils/payments';
+import { openReceiptsPreviewFromElementId } from '../../utils/printHandlers/receipts';
+import { openConvocationsPreviewFromElementId } from '../../utils/printHandlers/convocations';
+import { echeancesManager } from '../../utils/echeancesManager';
+import { getEnteteConfig } from '../../utils/entetesConfig';
+import ElevePaymentPage from './ElevePaymentPage';
+import Button from '../UI/Button';
+import { financialCache } from '../../utils/financialCache';
+
+// Types pour clarifier les structures de données
+interface SituationFinanciere {
+  eleve: Eleve;
+  classe: Classe | undefined;
+  totalDu: number;
+  totalPaye: number;
+  solde: number;
+  statut: 'Payé' | 'Partiel' | 'Impayé';
+  paiementsEleve: Paiement[];
+  dernierPaiement: Paiement | null;
+  situationEcheances: any;
+}
+
+interface FinanceStats {
+  totalRecettes: number;
+  elevesPayes: number;
+  elevesPartiels: number;
+  elevesImpayes: number;
+  totalSolde: number;
+}
+
+// Hooks personnalisés
+const useFinancialData = () => {
+  const eleves = db.getAll<Eleve>('eleves');
+  const paiements = db.getAll<Paiement>('paiements').filter(p => !p.canceled);
+  const fraisScolaires = db.getAll<FraisScolaire>('fraisScolaires');
+  const classes = db.getAll<Classe>('classes');
+  return { eleves, paiements, fraisScolaires, classes };
+};
+
+// combien de jours avant échéance on considère une convocation 'proche'
+const CONVOCATION_LEAD_DAYS = 12;
+
+const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format(montant) + ' FCFA';
+
+const getStatutColor = (statut: string) => {
+  const map: Record<string, string> = {
+    'Payé': 'bg-green-100 text-green-800',
+    'Partiel': 'bg-orange-100 text-orange-800',
+    'Impayé': 'bg-red-100 text-red-800'
+  };
+  return map[statut] || 'bg-gray-100 text-gray-800';
+};
+
+// Composants
+const AlertesEcheances: React.FC<{ alertes: any }> = ({ alertes }) => {
+  const [showDetails, setShowDetails] = useState(false);
+  if (!alertes || alertes.echeancesImpayees.length === 0) return null;
+  
+  return (
+    <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-yellow-900">Alertes d'Échéances Impayées</h3>
+        <button 
+          onClick={() => setShowDetails(!showDetails)} 
+          className="text-yellow-700 hover:bg-yellow-100 px-3 py-1 rounded-md transition-colors text-sm"
+        >
+          {showDetails ? 'Masquer' : 'Voir Détails'}
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
+          <div className="font-semibold text-orange-900">Échéances à Convocation</div>
+          <div className="text-orange-700">{alertes.echeancesImpayees.length} élève(s) nécessitant une convocation dans {CONVOCATION_LEAD_DAYS} jours</div>
+        </div>
+      </div>
+      {showDetails && (
+        <div className="mt-4 space-y-3">
+          {alertes.echeancesImpayees.slice(0, 5).map((a: any) => (
+            <div key={a.eleve.id} className="text-orange-700">
+              {formatNomPrenoms(a.eleve)} - {a.totalDu.toLocaleString('fr-FR')} FCFA
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+const FilterBar: React.FC<{
+  searchTerm: string;
+  filterClasse: string;
+  filterStatut: string;
+  classes: Classe[];
+  onSearchChange: (value: string) => void;
+  onClasseChange: (value: string) => void;
+  onStatutChange: (value: string) => void;
+  onPrint: () => void;
+  onPrintConvocations?: () => void;
+}> = ({ searchTerm, filterClasse, filterStatut, classes, onSearchChange, onClasseChange, onStatutChange, onPrint, onPrintConvocations }) => (
+  <div className="bg-white p-4 rounded-md border border-gray-200 mt-4">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input 
+          value={searchTerm} 
+          onChange={e => onSearchChange(e.target.value)} 
+          placeholder="Rechercher un élève..." 
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md" 
+        />
+      </div>
+      <select 
+        value={filterClasse} 
+        onChange={e => onClasseChange(e.target.value)} 
+        className="px-4 py-2 border border-gray-300 rounded-md"
+      >
+        <option value="">Toutes les classes</option>
+        {classes.map((c: Classe) => (
+          <option key={c.id} value={c.id}>{c.niveau} {c.section}</option>
+        ))}
+      </select>
+      <select 
+        value={filterStatut} 
+        onChange={e => onStatutChange(e.target.value)} 
+        className="px-4 py-2 border border-gray-300 rounded-md"
+      >
+        <option value="">Tous les statuts</option>
+        <option value="Payé">Payé</option>
+        <option value="Partiel">Partiel</option>
+        <option value="Impayé">Impayé</option>
+      </select>
+      <div className="flex items-center space-x-2">
+        <Button variant="ghost" onClick={onPrint}>
+          <Printer className="h-4 w-4" /> 
+          <span>Imprimer Liste</span>
+        </Button>
+        {typeof onPrintConvocations === 'function' && (
+          <Button variant="ghost" onClick={onPrintConvocations}>
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <span>Convocations</span>
+          </Button>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+const Modal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  maxWidth?: string;
+}> = ({ isOpen, onClose, children, maxWidth = '2xl' }) => {
+  if (!isOpen) return null;
+
+  const maxWidthClasses: Record<string, string> = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-lg',
+    xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '4xl': 'max-w-4xl'
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className={`bg-white rounded-2xl shadow-2xl ${maxWidthClasses[maxWidth]} w-full mx-4 max-h-[90vh] overflow-y-auto`}>
+        {children}
+        <div className="p-4 border-t border-gray-200 flex justify-end">
+          <button onClick={onClose} className="px-6 py-2 bg-gray-100 rounded-lg">
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Composant principal
+export default function FinancesList() {
+  const { showToast } = useToast();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterClasse, setFilterClasse] = useState('');
+  const [filterStatut, setFilterStatut] = useState('');
+  const [modals, setModals] = useState({ 
+    paymentForm: false, 
+    recu: false, 
+    combinedRecu: false, 
+    convocation: false, 
+    elevePaymentPage: false 
+  });
+  const [selectedEleve, setSelectedEleve] = useState<Eleve | null>(null);
+  const [lastPayment, setLastPayment] = useState<Paiement | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50);
+
+  const { eleves, paiements, classes } = useFinancialData();
+
+  // Calculer les situations financières avec cache et pagination
+  const situationsFinancieres = useMemo(() => {
+    return eleves.map(eleve => {
+      try {
+        const paiementsEleve = paiements.filter(p => p.eleveId === eleve.id && !p.canceled);
+        // Utiliser le cache pour éviter les recalculs
+        const situation = financialCache.getSituationEcheances(eleve.id, paiementsEleve.length);
+        const classe = classes.find(c => c.id === eleve.classeId);
+        const dernierPaiement = paiementsEleve.length ? paiementsEleve[paiementsEleve.length - 1] : null;
+
+        if (situation) {
+          const totalDu = Number(situation.totalDu || 0);
+          const totalPaye = Number(situation.totalPaye || 0);
+          const solde = Number(situation.totalRestant ?? (totalDu - totalPaye));
+          const statut = totalDu > 0 ? (totalPaye >= totalDu ? 'Payé' : (totalPaye > 0 ? 'Partiel' : 'Impayé')) : (totalPaye > 0 ? 'Partiel' : 'Impayé');
+          return {
+            eleve,
+            classe,
+            totalDu,
+            totalPaye,
+            solde,
+            statut,
+            paiementsEleve,
+            dernierPaiement,
+            situationEcheances: situation
+          } as SituationFinanciere;
+        }
+
+        const totalPayeFallback = paiementsEleve.reduce((s, p) => s + (p.montant || 0), 0);
+        return {
+          eleve,
+          classe,
+          totalDu: 0,
+          totalPaye: totalPayeFallback,
+          solde: -totalPayeFallback,
+          statut: totalPayeFallback > 0 ? 'Partiel' : 'Impayé',
+          paiementsEleve,
+          dernierPaiement,
+          situationEcheances: null
+        } as SituationFinanciere;
+      } catch (e) {
+        const classe = classes.find(c => c.id === eleve.classeId);
+        const paiementsEleve = paiements.filter(p => p.eleveId === eleve.id && !p.canceled);
+        const dernierPaiement = paiementsEleve.length ? paiementsEleve[paiementsEleve.length - 1] : null;
+        const totalPayeFallback = paiementsEleve.reduce((s, p) => s + (p.montant || 0), 0);
+        return {
+          eleve,
+          classe,
+          totalDu: 0,
+          totalPaye: totalPayeFallback,
+          solde: -totalPayeFallback,
+          statut: totalPayeFallback > 0 ? 'Partiel' : 'Impayé',
+          paiementsEleve,
+          dernierPaiement,
+          situationEcheances: null
+        } as SituationFinanciere;
+      }
+    });
+  }, [eleves, paiements, classes]);
+
+  // Calculer les alertes
+  const alertesEcheances = useMemo(() => echeancesManager.getAlertesEcheances(CONVOCATION_LEAD_DAYS), []);
+
+  useEffect(() => {
+    const onData = () => {
+      // Invalider le cache quand les données changent
+      financialCache.invalidateAll();
+    };
+    window.addEventListener('dataChanged', onData as EventListener);
+    return () => window.removeEventListener('dataChanged', onData as EventListener);
+  }, []);
+
+  const openModal = useCallback((m: keyof typeof modals) => 
+    setModals(prev => ({ ...prev, [m]: true })), []
+  );
+  
+  const closeModal = useCallback((m: keyof typeof modals) => 
+    setModals(prev => ({ ...prev, [m]: false })), []
+  );
+
+  const filteredSituations = useMemo(() => {
+    let filtered = [...situationsFinancieres];
+    
+    if (searchTerm) {
+      const t = searchTerm.toLowerCase();
+      filtered = filtered.filter(s => 
+        s.eleve.nom.toLowerCase().includes(t) || 
+        s.eleve.prenoms.toLowerCase().includes(t) || 
+        s.eleve.matricule.toLowerCase().includes(t)
+      );
+    }
+    
+    if (filterClasse) {
+      filtered = filtered.filter(s => s.eleve.classeId === filterClasse);
+    }
+    
+    if (filterStatut) {
+      filtered = filtered.filter(s => s.statut === filterStatut);
+    }
+    
+    return filtered.sort((a, b) => a.eleve.nom.localeCompare(b.eleve.nom));
+  }, [situationsFinancieres, searchTerm, filterClasse, filterStatut]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredSituations.length / itemsPerPage);
+  const paginatedSituations = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredSituations.slice(startIndex, endIndex);
+  }, [filteredSituations, currentPage, itemsPerPage]);
+
+  // Réinitialiser la page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterClasse, filterStatut]);
+
+  const stats: FinanceStats = useMemo(() => ({
+    totalRecettes: paiements.reduce((sum, p) => sum + (p.montant || 0), 0),
+    elevesPayes: situationsFinancieres.filter(s => s.statut === 'Payé').length,
+    elevesPartiels: situationsFinancieres.filter(s => s.statut === 'Partiel').length,
+    elevesImpayes: situationsFinancieres.filter(s => s.statut === 'Impayé').length,
+    totalSolde: situationsFinancieres.reduce((sum, s) => sum + s.solde, 0)
+  }), [paiements, situationsFinancieres]);
+
+  const handlePaymentSubmit = useCallback((
+    eleveId: string, 
+    _montant: number, 
+    _type: string, 
+    _modalite: number | 'auto', 
+    paiement?: Paiement
+  ) => {
+    closeModal('paymentForm');
+    if (paiement) {
+      setLastPayment(paiement);
+      const el = eleves.find(e => e.id === eleveId);
+      if (el) { 
+        setSelectedEleve(el); 
+        openModal('recu'); 
+      }
+    }
+    showToast('Paiement enregistré avec succès', 'success');
+  setTimeout(() => {/* db dispatches dataChanged */}, 800);
+  }, [eleves, showToast, closeModal, openModal]);
+
+  const handleOpenPaymentPage = useCallback((eleve: Eleve) => { 
+    setSelectedEleve(eleve); 
+    openModal('elevePaymentPage'); 
+  }, [openModal]);
+
+  const handleClosePaymentPage = useCallback(() => { 
+    closeModal('elevePaymentPage'); 
+    setSelectedEleve(null); 
+  setTimeout(() => {/* db dispatches dataChanged */}, 100); 
+  }, [closeModal]);
+
+  const handlePrintRecu = useCallback((eleve: Eleve) => {
+    const situation = situationsFinancieres.find(s => s.eleve.id === eleve.id);
+    if (!situation || !situation.dernierPaiement) { 
+      showToast('Aucun paiement trouvé pour cet élève', 'error'); 
+      return; 
+    }
+    setSelectedEleve(eleve); 
+    setLastPayment(situation.dernierPaiement); 
+    openModal('recu');
+  }, [situationsFinancieres, showToast, openModal]);
+
+  const handlePrintCombinedRecu = useCallback((eleve: Eleve) => {
+    const situation = situationsFinancieres.find(s => s.eleve.id === eleve.id);
+    if (!situation || situation.paiementsEleve.length === 0) { 
+      showToast('Aucun paiement trouvé pour cet élève', 'error'); 
+      return; 
+    }
+    setSelectedEleve(eleve); 
+    openModal('combinedRecu');
+  }, [situationsFinancieres, showToast, openModal]);
+
+  // Individual convocation generation handled via modal flow when needed. Batch convocations handled by handleBatchConvocations.
+
+  // Batch generate convocations for all overdue élèves and open print preview 5 per page
+  const handleBatchConvocations = useCallback(() => {
+    try {
+  const convocations = echeancesManager.generateConvocations(CONVOCATION_LEAD_DAYS);
+      if (!convocations || convocations.length === 0) {
+        showToast('Aucune convocation à générer', 'info');
+        return;
+      }
+
+      const container = document.getElementById('finances-print-area');
+      if (!container) {
+        showToast('Zone d\'impression introuvable', 'error');
+        return;
+      }
+
+      // Build compact HTML blocks for each convocation
+  const entete = getEnteteConfig('recu') as any;
+  const ecole = (db.getAll('ecole')[0] as any) || {};
+  const logo = (ecole && ecole.logo) || (entete && entete.logo) || '';
+
+      // helper to compute a deadline string/html per convocation (prochaine échéance dans les 12 jours)
+      const computeDeadlineHtml = (c: any) => {
+        try {
+          const today = new Date();
+          const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const LEAD_DAYS = 12;
+          
+          // Filtrer les échéances futures dans les 12 prochains jours
+          const prochaines = (c.echeancesEchues || [])
+            .filter((e: any) => {
+              if (!e.date) return false;
+              const echeanceDate = new Date(e.date);
+              const joursRestants = Math.ceil((echeanceDate.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+              return joursRestants > 0 && joursRestants <= LEAD_DAYS;
+            })
+            .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          if (prochaines.length > 0) {
+            // Prendre la première échéance future (la plus proche)
+            const prochaineEcheance = new Date(prochaines[0].date);
+            const formatted = prochaineEcheance.toLocaleDateString('fr-FR', { 
+              day: 'numeric', 
+              month: 'long', 
+              year: 'numeric' 
+            });
+            const capitalized = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+            return `<div class="print-deadline" style="margin-top:8px;"><div>Date limite de paiement :</div><div style="font-weight:700;color:#b91c1c;margin-top:4px;">${capitalized}</div></div>`;
+          } else {
+            return `<div class="print-deadline" style="margin-top:8px;"><div>Date limite de paiement :</div><div style="font-weight:700;color:#b91c1c;margin-top:4px;">Dès que possible</div></div>`;
+          }
+        } catch (err) { return ''; }
+      };
+
+      const blocks = convocations.map((c: any) => {
+        const eleve = c.eleve;
+        const classe = c.classe || {};
+        const phone = eleve.pereTuteur || eleve.telephone || eleve.mereTutrice || '-';
+        const echeances = (c.echeancesEchues || []).map((e: any) => {
+          const label = e.modalite === 1 ? 'Inscription' : `Versement ${e.modalite}`;
+          return `${label} — ${Number(e.montantRestant||0).toLocaleString('fr-FR')} FCFA — échéance ${new Date(e.date).toLocaleDateString('fr-FR')}`;
+        });
+        return `
+          <div class="convocation" style="margin-bottom:8mm;">
+            <div style="font-family: 'Times New Roman', Times, serif; font-size:12px; color:#111827;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  ${logo ? `<img src="${logo}" alt="logo" style="height:48px; width:auto; object-fit:contain;"/>` : `<div style="width:48px;height:48px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:11px;border-radius:6px">Logo</div>`}
+                  <div>
+                    <div style="font-weight:700; font-size:13px;">${ecole.nom || entete.header || 'École'}</div>
+                    <div style="font-size:11px; color:#374151;">Année: ${c.anneeScolaire || ''}</div>
+                  </div>
+                </div>
+                <div style="text-align:right; font-size:11px; color:#374151;">Convocation de paiement<br/>Imprimé le ${new Date().toLocaleDateString('fr-FR')}</div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                  <div>
+                    <div style="font-weight:600">Élève</div>
+                    <div>${formatNomPrenoms(eleve)}</div>
+                    <div style="font-size:11px; color:#6b7280">Matricule: ${eleve.matricule || '-'}</div>
+                    <div style="font-size:11px; color:#6b7280">Tél parent: ${phone}</div>
+                  </div>
+                <div style="text-align:right">
+                  <div style="font-weight:600">Classe</div>
+                  <div>${classe.niveau || '-'} ${classe.section || ''}</div>
+                </div>
+              </div>
+
+              <div style="margin-bottom:6px; font-weight:600">Montant dû: ${(c.totalDu||0).toLocaleString('fr-FR')} FCFA</div>
+              <div style="font-size:11px; color:#374151;">${echeances.length ? '<ul style="margin:0;padding-left:18px;">' + (echeances as any[]).map((it: any) => `<li>${it}</li>`).join('') + '</ul>' : '<div>Aucune échéance impayée.</div>'}</div>
+              <div style="margin-top:8px; font-size:12px; color:#111827;">
+                <div class="print-important" style="font-weight:800; color:#b91c1c;">IMPORTANT :</div>
+                <div style="margin-top:4px; font-weight:600; color:#b91c1c">Veuillez régler le montant dû dans les plus brefs délais — sans régularisation, l'élève risque de ne pas être accepté dans l'école.</div>
+                ${computeDeadlineHtml(c)}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('\n');
+
+    container.classList.add('print-four-per-page');
+    container.innerHTML = `<div class="convocations-wrapper">${blocks}</div>`;
+    openConvocationsPreviewFromElementId('finances-print-area', 'Convocations');
+  setTimeout(() => { container.classList.remove('print-four-per-page'); container.innerHTML = ''; }, 800);
+    } catch (err) {
+      console.error(err);
+      showToast('Erreur lors de la génération des convocations', 'error');
+    }
+  }, [showToast]);
+
+  const handlePrint = useCallback(() => {
+    try {
+      const container = document.getElementById('finances-print-area');
+      if (!container) { showToast('Zone d\'impression introuvable', 'error'); return; }
+
+      // Build a clean 'Liste des élèves' table
+      const entete = getEnteteConfig('recu') as any;
+      const ecole = (db.getAll('ecole')[0] as any) || {};
+      const schoolName = ecole.nom || entete?.header || 'École';
+
+      const rows = filteredSituations.map(s => {
+        const eleve = s.eleve || {};
+        const phone = eleve.pereTuteur || eleve.telephone || eleve.mereTutrice || '-';
+        const classe = s.classe ? `${s.classe.niveau || ''} ${s.classe.section || ''}`.trim() : '-';
+        const totalPaye = Number(s.totalPaye || 0);
+        const totalDu = Number(s.totalDu || 0);
+        const reste = Number(s.solde || 0);
+        const solvabilite = reste <= 0 ? 'Soldé' : 'Non soldé';
+
+        return `
+          <tr>
+            <td style="padding:8px;border:1px solid #e5e7eb">${formatNomPrenoms(eleve)}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb">${phone}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb">${classe}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:right">${totalPaye.toLocaleString('fr-FR')} FCFA</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:right">${totalDu.toLocaleString('fr-FR')} FCFA</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:right">${reste.toLocaleString('fr-FR')} FCFA</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center">${solvabilite}</td>
+          </tr>
+        `;
+      }).join('\n');
+
+      const tableHtml = `
+        <div style="font-family: 'Times New Roman', Times, serif; color:#111827; padding:8mm;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="font-weight:800;font-size:18px">${schoolName}</div>
+            <div style="text-align:right;font-size:12px;color:#6b7280">Liste des élèves — Imprimé le ${new Date().toLocaleDateString('fr-FR')}</div>
+          </div>
+
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;color:#111827">Nom et Prénoms</th>
+                <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;color:#111827">Tél parent</th>
+                <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;color:#111827">Classe</th>
+                <th style="text-align:right;padding:8px;border:1px solid #e5e7eb;color:#111827">Total payé</th>
+                <th style="text-align:right;padding:8px;border:1px solid #e5e7eb;color:#111827">Total

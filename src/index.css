@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Print helpers: hide everything except #print-area when printing */
+@media print {
+	/* hide elements marked no-print */
+	.no-print { display: none !important; }
+
+	/* make only the print-area visible */
+	body * { visibility: hidden; }
+	#print-area, #print-area * { visibility: visible; }
+	#print-area { position: absolute; left: 0; top: 0; width: 100%; }
+
+	/* smaller font for compact prints */
+	.print-compact { font-size: 11px; line-height: 1.5; font-family: 'Times New Roman', Times, serif; }
+
+	/* configurable print measurements to allow tweaking for specific printers */
+	:root {
+		--print-margin: 6mm; /* page margin reduced to fit two receipts */
+		--cut-gap: 4mm; /* smaller gap between two receipts */
+		--page-height: 297mm; /* A4 */
+		--printable-height: calc(var(--page-height) - (var(--print-margin) * 2));
+		--receipt-height: calc((var(--printable-height) - var(--cut-gap)) / 2);
+	}
+
+	/* Ensure print uses Times New Roman by default */
+	body, #print-area { font-family: 'Times New Roman', Times, serif; color: #111827; }
+
+	/* two receipts per A4: split page into two vertical halves */
+	.print-two-per-page { display: block; position: relative; min-height: var(--page-height); }
+	@page { size: A4 portrait; margin: var(--print-margin); }
+
+	/* layout for two receipts per page: each receipt occupies half of printable height with a visible cut guide between */
+	.print-two-per-page .receipt-compact { box-sizing: border-box; page-break-inside: avoid; overflow: hidden; padding: 8mm; margin: 0 auto; }
+	/* make each receipt use the printable width (page width minus page margins) and center it */
+	.print-two-per-page .receipt-compact { width: calc(100% - (var(--print-margin) * 2)); }
+	/* receipt height computed from variables to allow printer-specific tweaks */
+	.print-two-per-page .receipt-compact { height: var(--receipt-height); }
+
+	/* A dashed horizontal cut line exactly between the two receipts, with a scissors icon centered */
+	.print-two-per-page::before {
+		content: '';
+		position: absolute;
+		top: calc(var(--print-margin) + var(--receipt-height) + calc(var(--cut-gap) / 2)); /* top margin + first receipt height + half of cut gap */
+		left: var(--print-margin);
+		right: var(--print-margin);
+		height: 0;
+		border-top: 1px dashed #444;
+		pointer-events: none;
+	}
+	.print-two-per-page::after {
+		content: '\2702'; /* ✂ */
+		position: absolute;
+		top: calc(var(--print-margin) + var(--receipt-height) - calc(var(--cut-gap) / 2)); /* place scissors slightly above the dashed line so it overlaps visually */
+		left: 50%;
+		transform: translateX(-50%);
+		background: white;
+		padding: 0 6px;
+		color: #444;
+		font-size: 11px;
+		border-radius: 2px;
+		pointer-events: none;
+	}
+
+	/* small vertical crop marks at left/right centered on the cut line to help manual cutting */
+	.print-two-per-page .crop-mark-left, .print-two-per-page .crop-mark-right { display: none; }
+
+	.print-two-per-page .crop-mark { position: absolute; width: 0; height: 6mm; border-left: 1px solid rgba(0,0,0,0.2); top: calc(12mm + 133.5mm - 3mm); }
+	.print-two-per-page .crop-mark.left { left: 6mm; }
+	.print-two-per-page .crop-mark.right { right: 6mm; }
+
+	/* keep a visible but subtle separator for visual rendering inside the document as well */
+	.print-two-per-page .receipt-compact + .receipt-compact { margin-top: 6mm; padding-top: 8mm; position: relative; }
+
+	/* Add stronger crop marks and scissors for individual receipts similar to convocations */
+	.print-two-per-page .receipt-compact::after {
+		content: '';
+		position: absolute;
+		left: 6mm;
+		top: 2mm;
+		bottom: 2mm;
+		width: 0;
+		border-left: 1px solid rgba(0,0,0,0.08);
+		pointer-events: none;
+	}
+	.print-two-per-page .receipt-compact::before {
+		content: '\2702';
+		position: absolute;
+		top: -7mm;
+		left: 50%;
+		transform: translateX(-50%);
+		background: white;
+		padding: 0 4px;
+		color: #444;
+		font-size: 10px;
+		border-radius: 2px;
+		pointer-events: none;
+	}
+
+	/* Convocations: 4 per A4, with separators and compact font */
+	.print-four-per-page { display: block; }
+	/* available height = 297mm - (12mm*2) = 273mm; leave 3 gaps of 4mm = 12mm => available for items = 261mm => per item ~= 65.25mm
+	   choose 65mm with 4mm gaps for breathing room */
+	.print-four-per-page .convocation { box-sizing: border-box; height: 65mm; overflow: hidden; padding: 6mm; page-break-inside: avoid; }
+	.print-four-per-page .convocation + .convocation { border-top: 1px dashed #444; margin-top: 4mm; padding-top: 4mm; position: relative; }
+	/* add a small scissors icon on each separator for convocation stacks */
+	.print-four-per-page .convocation + .convocation::before {
+		content: '\2702';
+		position: absolute;
+		top: -9mm;
+		left: 50%;
+		transform: translateX(-50%);
+		background: white;
+		padding: 0 3px;
+		color: #444;
+		font-size: 10px;
+	}
+
+	/* small crop marks on left/right for cutting guides */
+	.print-four-per-page .convocation::after {
+		content: '';
+		position: absolute;
+		left: 6mm;
+		top: 2mm;
+		bottom: 2mm;
+		width: 0;
+		border-left: 1px solid rgba(0,0,0,0.08);
+		pointer-events: none;
+	}
+
+	/* wrapper helper: allow multiple convocations and ensure page-breaks each 4 items */
+	.convocations-wrapper { display: block; width: 100%; box-sizing: border-box; }
+	.print-four-per-page .convocations-wrapper { display: block; }
+	.print-four-per-page .convocation { break-inside: avoid; }
+	/* force page breaks after each group of 4 convocations to ensure 4 per printed page */
+	.print-four-per-page .convocation:nth-child(4n) { page-break-after: always; }
+
+
+	/* Slightly lower the main libelle/header for print */
+	.entete-libelle { margin-top: 0.25rem; }
+
+	/* Ensure tables use Times New Roman and proper spacing */
+	#print-area table, #print-area th, #print-area td {
+		font-family: 'Times New Roman', Times, serif;
+		line-height: 1.5;
+	}
+
+	/* Force IMPORTANT blocks to be visible and prominent when printing */
+	.print-important { color: #b91c1c !important; font-weight: 800 !important; }
+	.print-deadline { color: #7f1d1d !important; font-weight: 700 !important; font-size: 1.0rem !important; }
+
+	/* Comptabilité print helper: ensure totals show clearly */
+	.compta-print-totals { font-weight: 700; color: #111827; margin-top: 8px; }
+}
