@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Exemple - 2 Reçus</title>
+  <style>
+    @media print {
+      @page { size: A4 portrait; margin: 12mm; }
+      body { font-family: 'Times New Roman', Times, serif; margin: 0; }
+      .recu { box-sizing: border-box; width: 100%; padding: 8mm; border: 1px solid #ddd; margin: 0; }
+      .recu + .recu { margin-top: 6mm; }
+      h2 { text-align: center; color: #0f766e; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      table th, table td { border: 1px solid #ddd; padding: 4px; }
+    }
+    body { font-family: 'Times New Roman', Times, serif; padding: 12px; }
+  </style>
+</head>
+<body>
+  <div class="recu">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-weight:700">GROUPE SCOLAIRE BAPTISTE MISSIONNAIRE DE KOUMASSI CENTRE</div>
+        <div style="font-size:12px;color:#666">Année scolaire : 2025-2026</div>
+      </div>
+      <div style="text-align:right;font-size:12px;color:#444">
+        <div><strong>N° Reçu :</strong> REC44600199</div>
+        <div>Date : 13/09/2025</div>
+      </div>
+    </div>
+    <h2>REÇU DE PAIEMENT</h2>
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+      <div>
+        <div><strong>Élève :</strong> Oulobo Elmas Tresor</div>
+        <div><strong>Matricule :</strong> 250002</div>
+        <div><strong>Classe :</strong> CP1 A</div>
+      </div>
+      <div style="text-align:right">Opérateur : Mme POUPOUYA</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Modalité</th><th style="text-align:right">Montant réglé</th><th style="text-align:right">Montant attendu</th><th style="text-align:right">Reste</th><th style="text-align:right">Date / Heure</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Inscription</td><td style="text-align:right">35 000 FCFA</td><td style="text-align:right">35 000 FCFA</td><td style="text-align:right">0 FCFA</td><td style="text-align:right">13/09/2025 06:23:20</td></tr>
+      </tbody>
+    </table>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px;">
+      <div style="min-width:280px;">
+        <div>Montant réglé (aujourd'hui) : <strong>35 000 FCFA</strong></div>
+        <div>Cumul réglé : 35 000 FCFA</div>
+        <div>Total attendu : 0 FCFA</div>
+        <div>Reste à payer : <strong style="color:#b91c1c">0 FCFA</strong></div>
+      </div>
+      <div style="align-self:flex-end;font-weight:700;color:#0f766e">Merci pour ce paiement.</div>
+    </div>
+    <div style="font-size:11px;color:#666;margin-top:6px;text-align:right">Mode: Espèces · Imprimé le 13/09/2025 à 06:46:24</div>
+  </div>
+
+  <div class="recu">
+    <!-- duplicate for two-up preview -->
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-weight:700">GROUPE SCOLAIRE BAPTISTE MISSIONNAIRE DE KOUMASSI CENTRE</div>
+        <div style="font-size:12px;color:#666">Année scolaire : 2025-2026</div>
+      </div>
+      <div style="text-align:right;font-size:12px;color:#444">
+        <div><strong>N° Reçu :</strong> REC44600199</div>
+        <div>Date : 13/09/2025</div>
+      </div>
+    </div>
+    <h2>REÇU DE PAIEMENT</h2>
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+      <div>
+        <div><strong>Élève :</strong> Oulobo Elmas Tresor</div>
+        <div><strong>Matricule :</strong> 250002</div>
+        <div><strong>Classe :</strong> CP1 A</div>
+      </div>
+      <div style="text-align:right">Opérateur : Mme POUPOUYA</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Modalité</th><th style="text-align:right">Montant réglé</th><th style="text-align:right">Montant attendu</th><th style="text-align:right">Reste</th><th style="text-align:right">Date / Heure</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Inscription</td><td style="text-align:right">35 000 FCFA</td><td style="text-align:right">35 000 FCFA</td><td style="text-align:right">0 FCFA</td><td style="text-align:right">13/09/2025 06:23:20</td></tr>
+      </tbody>
+    </table>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px;">
+      <div style="min-width:280px;">
+        <div>Montant réglé (aujourd'hui) : <strong>35 000 FCFA</strong></div>
+        <div>Cumul réglé : 35 000 FCFA</div>
+        <div>Total attendu : 0 FCFA</div>
+        <div>Reste à payer : <strong style="color:#b91c1c">0 FCFA</strong></div>
+      </div>
+      <div style="align-self:flex-end;font-weight:700;color:#0f766e">Merci pour ce paiement.</div>
+    </div>
+    <div style="font-size:11px;color:#666;margin-top:6px;text-align:right">Mode: Espèces · Imprimé le 13/09/2025 à 06:46:24</div>
+  </div>
+</body>
+</html>
