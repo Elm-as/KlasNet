@@ -6,12 +6,16 @@ import PaymentForm from './PaymentForm';
 import { useToast } from '../Layout/ToastProvider';
 import { openPrintPreviewFromElementId } from '../../utils/printPreview';
 import { getCurrentUser } from '../../utils/auth';
+import { useDebounce } from '../../hooks/useDebounce';
+import { TableSkeleton } from '../UI/SkeletonLoader';
+import { AuditLogger } from '../Config/AuditLogView';
 
 export default function FinancesList() {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [showPaymentModal, setShowPaymentModal] = React.useState(false);
   const [formMontant, setFormMontant] = React.useState('');
   const [formType, setFormType] = React.useState('scolarite');
+  const [isLoading, setIsLoading] = React.useState(false);
   const eleves = db.getAll<Eleve>('eleves');
   const paiements = db.getAll<Paiement>('paiements');
   const fraisScolaires = db.getAll<FraisScolaire>('fraisScolaires');
@@ -19,14 +23,15 @@ export default function FinancesList() {
 
   const [selectedClasse, setSelectedClasse] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const filteredEleves = useMemo(() => {
     let filtered = eleves;
     if (selectedClasse) {
       filtered = filtered.filter(e => e.classeId === selectedClasse);
     }
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+    if (debouncedSearchTerm) {
+      const term = debouncedSearchTerm.toLowerCase();
       filtered = filtered.filter(e =>
         e.nom.toLowerCase().includes(term) ||
         e.prenoms.toLowerCase().includes(term) ||
@@ -34,7 +39,7 @@ export default function FinancesList() {
       );
     }
     return filtered;
-  }, [eleves, selectedClasse, searchTerm]);
+  }, [eleves, selectedClasse, debouncedSearchTerm]);
 
   const [elevePaiement, setElevePaiement] = useState<string | null>(null);
   const [selectedModalite, setSelectedModalite] = useState<number | 'auto'>(1);
@@ -54,10 +59,28 @@ export default function FinancesList() {
     return () => window.removeEventListener('navigate', handler as EventListener);
   }, []);
 
+  // Memoize calculations for better performance
+  const paiementsMap = useMemo(() => {
+    const map = new Map<string, Paiement[]>();
+    paiements.forEach(p => {
+      const existing = map.get(p.eleveId) || [];
+      map.set(p.eleveId, [...existing, p]);
+    });
+    return map;
+  }, [paiements]);
+
+  const fraisMap = useMemo(() => {
+    const map = new Map<string, FraisScolaire>();
+    fraisScolaires.forEach(f => {
+      map.set(`${f.niveau}_${f.anneeScolaire}`, f);
+    });
+    return map;
+  }, [fraisScolaires]);
+
   // Situation financière calculation removed: we display explicit inscription and versements columns instead
 
   const getSommeParType = (eleveId: string, type?: string) => {
-    const paiementsEleve = paiements.filter(p => p.eleveId === eleveId);
+    const paiementsEleve = paiementsMap.get(eleveId) ?? [];
     if (type) {
       return paiementsEleve.filter(p => (p as any).typeFrais === type).reduce((s, p) => s + (p.montant || 0), 0);
     }
@@ -80,22 +103,22 @@ export default function FinancesList() {
   function getFraisForEleve(eleve: Eleve) {
     const classe = classes.find(c => c.id === eleve.classeId);
     if (!classe) return null;
-  const frais = fraisScolaires.find(f => f.niveau === classe.niveau && (f.anneeScolaire === classe.anneeScolaire));
+    const frais = fraisMap.get(`${classe.niveau}_${classe.anneeScolaire}`);
     return frais || null;
   }
 
   function getSommeParModalite(eleveId: string, modaliteIdx: number) {
     // For modalite 1 we must include explicit 'scolarite' versements with versementIndex=1
     // as well as any payments recorded as type 'inscription'
+    const paiementsEleve = paiementsMap.get(eleveId) ?? [];
     if (Number(modaliteIdx) === 1) {
-      const paiementsEleve = paiements.filter(p => p.eleveId === eleveId);
       const sommeInscription = paiementsEleve.filter(p => (p as any).typeFrais === 'inscription').reduce((s, p) => s + (p.montant || 0), 0);
       const sommeVersement1 = paiementsEleve.filter(p => (p as any).typeFrais === 'scolarite' && Number((p as any).versementIndex) === 1).reduce((s, p) => s + (p.montant || 0), 0);
       return (sommeInscription + sommeVersement1) || 0;
     }
-    const paiementsEleve = paiements.filter(p => p.eleveId === eleveId && (p as any).typeFrais === 'scolarite');
+    const scolaritePaiements = paiementsEleve.filter(p => (p as any).typeFrais === 'scolarite');
     // Somme des paiements explicitement rattachés à la modalité
-    const explicites = paiementsEleve.filter(p => Number((p as any).versementIndex) === Number(modaliteIdx)).reduce((s, p) => s + (p.montant || 0), 0);
+    const explicites = scolaritePaiements.filter(p => Number((p as any).versementIndex) === Number(modaliteIdx)).reduce((s, p) => s + (p.montant || 0), 0);
     return explicites || 0;
   }
 
@@ -108,11 +131,22 @@ export default function FinancesList() {
       // Pas d'échéances connues : créer paiement libre
       const numero = 'REC' + Date.now().toString().slice(-8);
       db.create<Paiement>('paiements', { eleveId, montant, typeFrais: 'scolarite', datePaiement: new Date().toISOString(), numeroRecu: numero, modePaiement: 'Espèces', createdAt: new Date().toISOString() } as any);
+      
+      // Log the payment
+      const currentUser = getCurrentUser();
+      AuditLogger.log({
+        type: 'payment',
+        action: `Paiement de ${montant} FCFA enregistré pour ${ele.nom} ${ele.prenoms}`,
+        user: currentUser ? `${currentUser.prenoms} ${currentUser.nom}` : 'Inconnu',
+        details: { eleveId, montant, type: 'scolarite', numeroRecu: numero },
+        status: 'success',
+      });
       return;
     }
 
     let remaining = Number(montant || 0);
   const echeances: any[] = ((frais as any).echeances || []).slice().sort((a: any, b: any) => (a.modalite || 0) - (b.modalite || 0));
+    const paiementsCreated: any[] = [];
     for (const e of echeances) {
       if (remaining <= 0) break;
       const modalite = Number(e.modalite || 0);
@@ -127,6 +161,7 @@ export default function FinancesList() {
       } else {
         db.create<Paiement>('paiements', { eleveId, montant: alloc, typeFrais: 'scolarite', versementIndex: modalite, datePaiement: new Date().toISOString(), numeroRecu: numero, modePaiement: 'Espèces', createdAt: new Date().toISOString() } as any);
       }
+      paiementsCreated.push({ modalite, montant: alloc, numero });
       remaining -= alloc;
     }
 
@@ -134,12 +169,24 @@ export default function FinancesList() {
       // Surplus : créer paiement non rattaché
       const numero = 'REC' + Date.now().toString().slice(-8) + '-SUR';
       db.create<Paiement>('paiements', { eleveId, montant: remaining, typeFrais: 'scolarite', datePaiement: new Date().toISOString(), numeroRecu: numero, modePaiement: 'Espèces', createdAt: new Date().toISOString() } as any);
+      paiementsCreated.push({ type: 'surplus', montant: remaining, numero });
     }
+
+    // Log the payment allocation
+    const currentUser = getCurrentUser();
+    AuditLogger.log({
+      type: 'payment',
+      action: `Paiement de ${montant} FCFA alloué automatiquement pour ${ele.nom} ${ele.prenoms}`,
+      user: currentUser ? `${currentUser.prenoms} ${currentUser.nom}` : 'Inconnu',
+      details: { eleveId, montantTotal: montant, allocations: paiementsCreated },
+      status: 'success',
+    });
   }
 
   // Supprimer les paiements historiques de montant 0 pour un élève
   function cleanupZeroPayments(eleveId: string) {
-    const zeros = paiements.filter(p => p.eleveId === eleveId && Number((p as any).montant || 0) === 0);
+    const elevePayments = paiementsMap.get(eleveId) ?? [];
+    const zeros = elevePayments.filter(p => Number((p as any).montant || 0) === 0);
     if (!zeros.length) {
       showToast('Aucun paiement à 0 FCFA trouvé', 'info');
       return;
@@ -151,6 +198,17 @@ export default function FinancesList() {
         // ignore individual errors
       }
     });
+    
+    const ele = eleves.find(e => e.id === eleveId);
+    const currentUser = getCurrentUser();
+    AuditLogger.log({
+      type: 'delete',
+      action: `${zeros.length} paiement(s) à 0 FCFA supprimé(s) pour ${ele?.nom} ${ele?.prenoms}`,
+      user: currentUser ? `${currentUser.prenoms} ${currentUser.nom}` : 'Inconnu',
+      details: { eleveId, count: zeros.length },
+      status: 'success',
+    });
+    
     showToast(`${zeros.length} paiement(s) à 0 FCFA supprimé(s)`, 'success');
     setRefreshKey(k => k + 1);
   }

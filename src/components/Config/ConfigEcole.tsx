@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../utils/database';
 import { Ecole } from '../../types';
 import { useToast } from '../Layout/ToastProvider';
-import { Save, Building2, Upload, X } from 'lucide-react';
+import { Save, Building2, Upload, X, ArrowLeft } from 'lucide-react';
 import { getAllEnteteConfig, saveEnteteConfig } from '../../utils/entetesConfig';
 import { licenceManager } from '../../utils/licenceManager';
 
-export default function ConfigEcole() {
+interface ConfigEcoleProps {
+  onBack?: () => void;
+}
+
+export default function ConfigEcole({ onBack }: ConfigEcoleProps = {}) {
   const { showToast } = useToast();
   const [ecole, setEcole] = useState<Ecole | null>(null);
   const [formData, setFormData] = useState({
@@ -114,16 +118,38 @@ export default function ConfigEcole() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      {/* Bouton retour si onBack est fourni */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors group"
+        >
+          <ArrowLeft className="h-5 w-5 group-hover:-translate-x-1 transition-transform" />
+          <span className="font-medium">Retour</span>
+        </button>
+      )}
+
       {/* En-tête */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-            <Building2 className="h-6 w-6 text-gray-600" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Building2 className="h-6 w-6 text-gray-600" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Configuration de l'École</h1>
+              <p className="text-sm text-gray-600 mt-1">Paramètres généraux et informations de l'établissement</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Configuration de l'École</h1>
-            <p className="text-gray-600 mt-1">Paramètres généraux et informations de l'établissement</p>
-          </div>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center justify-center space-x-2 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors sm:hidden"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Retour</span>
+            </button>
+          )}
         </div>
       </div>
 

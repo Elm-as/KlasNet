@@ -54,9 +54,10 @@ export default function Header({ currentUser, onLogout, onNavigate, currentPage,
     { id: 'classes', label: 'Classes' },
     { id: 'matieres', label: 'Matières' },
     { id: 'finances', label: 'Finances' },
+    { id: 'recouvrement', label: 'Recouvrement' },
     { id: 'notes', label: 'Notes' },
     { id: 'config', label: 'Configuration' },
-      { id: 'comptabilite', label: 'Comptabilité' },
+    { id: 'comptabilite', label: 'Comptabilité' },
   ];
 
   const toggleUserMenu = () => setUserMenuOpen((v) => !v);

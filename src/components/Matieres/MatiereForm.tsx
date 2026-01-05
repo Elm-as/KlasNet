@@ -28,11 +28,115 @@ export default function MatiereForm({ matiere, onSave, onCancel }: MatiereFormPr
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNiveau, setSelectedNiveau] = useState('CP1');
+  const [autoGenerateAbreviation, setAutoGenerateAbreviation] = useState(true);
 
   const niveaux = [
     'Petite Section', 'Moyenne Section', 'Grande Section',
     'CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'
   ];
+
+  /**
+   * Génère automatiquement une abréviation intelligente basée sur le nom de la matière
+   * Exemples:
+   * - "Mathématiques" → "MATH"
+   * - "Français" → "FR"
+   * - "Éducation Physique et Sportive" → "EPS"
+   * - "Sciences et Vie de la Terre" → "SVT"
+   */
+  const generateAbreviation = (nom: string): string => {
+    if (!nom || nom.trim() === '') return '';
+
+    const nomTrimmed = nom.trim();
+    
+    // Cas spéciaux courants
+    const specialCases: Record<string, string> = {
+      'mathématiques': 'MATH',
+      'français': 'FR',
+      'anglais': 'ANG',
+      'lecture': 'LECT',
+      'écriture': 'ECR',
+      'dictée': 'DICT',
+      'calcul': 'CALC',
+      'géométrie': 'GEO',
+      'sciences': 'SCI',
+      'histoire': 'HIST',
+      'géographie': 'GEO',
+      'informatique': 'INFO',
+      'dessin': 'DESS',
+      'musique': 'MUS',
+      'sport': 'SPORT',
+      'éducation physique': 'EPS',
+      'éducation physique et sportive': 'EPS',
+      'arts plastiques': 'ART',
+      'expression écrite': 'EE',
+      'expression orale': 'EO',
+      'récitation': 'REC',
+      'poésie': 'POE',
+      'grammaire': 'GRA',
+      'conjugaison': 'CONJ',
+      'orthographe': 'ORTH',
+      'vocabulaire': 'VOC',
+      'sciences naturelles': 'SN',
+      'sciences physiques': 'SP',
+      'sciences et vie de la terre': 'SVT',
+      'technologie': 'TECH',
+      'éducation civique': 'EC',
+      'éducation morale': 'EM',
+      'éducation religieuse': 'ER'
+    };
+
+    // Vérifier les cas spéciaux (insensible à la casse et accents)
+    const nomLower = nomTrimmed.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    
+    for (const [key, abbr] of Object.entries(specialCases)) {
+      const keyNormalized = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (nomLower === keyNormalized) {
+        return abbr;
+      }
+    }
+
+    // Si nom composé avec "et" → prendre initiales de chaque mot important
+    if (nomTrimmed.includes(' et ') || nomTrimmed.includes(' & ')) {
+      const words = nomTrimmed
+        .split(/\s+(?:et|&)\s+/)
+        .flatMap(part => part.split(' '))
+        .filter(w => w.length > 2); // Ignorer les mots courts comme "de", "la"
+      
+      if (words.length >= 2) {
+        return words
+          .map(w => w[0].toUpperCase())
+          .join('')
+          .slice(0, 4);
+      }
+    }
+
+    // Si nom composé avec plusieurs mots → prendre initiales
+    const words = nomTrimmed.split(' ').filter(w => w.length > 2);
+    if (words.length >= 2) {
+      return words
+        .map(w => w[0].toUpperCase())
+        .join('')
+        .slice(0, 4);
+    }
+
+    // Nom simple → prendre les 3-4 premières lettres en majuscule
+    const cleaned = nomTrimmed.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+    if (cleaned.length <= 4) {
+      return cleaned.toUpperCase();
+    }
+    
+    // Prendre consonnes puis voyelles pour meilleure lisibilité
+    const consonnes = cleaned.match(/[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ]/g) || [];
+    const voyelles = cleaned.match(/[aeiouyAEIOUYÀÉÈÊËÎÏÔÙÛàéèêëîïôùû]/g) || [];
+    
+    if (consonnes.length >= 3) {
+      return consonnes.slice(0, 4).join('').toUpperCase();
+    }
+    
+    return cleaned.slice(0, 4).toUpperCase();
+  };
 
   useEffect(() => {
     if (matiere) {
@@ -47,6 +151,7 @@ export default function MatiereForm({ matiere, onSave, onCancel }: MatiereFormPr
       };
       setFormData(initial);
       initialRef.current = initial;
+      setAutoGenerateAbreviation(false); // Ne pas auto-générer lors de l'édition
     }
   }, [matiere]);
 
@@ -136,6 +241,12 @@ export default function MatiereForm({ matiere, onSave, onCancel }: MatiereFormPr
   const handleInputChange = (field: keyof typeof formData, value: unknown) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
+    // Auto-générer l'abréviation lorsque le nom change (si activé)
+    if (field === 'nom' && autoGenerateAbreviation && typeof value === 'string') {
+      const generatedAbbr = generateAbreviation(value);
+      setFormData(prev => ({ ...prev, abreviation: generatedAbbr }));
+    }
+    
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -173,41 +284,63 @@ export default function MatiereForm({ matiere, onSave, onCancel }: MatiereFormPr
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Informations de base
             </h3>
-            
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Nom de la matière <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.nom}
-                onChange={(e) => handleInputChange('nom', e.target.value)}
-                className={`w-full px-4 py-3 border rounded-md focus:ring-2 focus:ring-gray-500 transition-colors ${
-                  errors.nom ? 'border-red-300 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
-                }`}
-                placeholder="Ex: Mathématiques, Français, Sciences..."
-              />
-              {errors.nom && <p className="mt-2 text-sm text-red-600 flex items-center"><span className="mr-1">⚠️</span>{errors.nom}</p>}
-            </div>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Nom de la matière <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.nom}
+                  onChange={(e) => handleInputChange('nom', e.target.value)}
+                  className={`w-full px-4 py-3 border rounded-md focus:ring-2 focus:ring-blue-500 transition-colors ${
+                    errors.nom ? 'border-red-300 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+                  }`}
+                  placeholder="Ex: Mathématiques, Français, Sciences..."
+                />
+                {errors.nom && <p className="mt-2 text-sm text-red-600 flex items-center"><span className="mr-1">⚠️</span>{errors.nom}</p>}
+              </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Abréviation <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.abreviation}
-                onChange={(e) => handleInputChange('abreviation', e.target.value.toUpperCase())}
-                className={`w-full px-4 py-3 border rounded-md focus:ring-2 focus:ring-gray-500 transition-colors ${
-                  errors.abreviation ? 'border-red-300 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
-                }`}
-                placeholder="Ex: MATH, FR, AEM..."
-                maxLength={10}
-              />
-              {errors.abreviation && <p className="mt-2 text-sm text-red-600 flex items-center"><span className="mr-1">⚠️</span>{errors.abreviation}</p>}
-              <p className="mt-2 text-xs text-gray-500">
-                Abréviation utilisée dans les tableaux de notes (max 10 caractères)
-              </p>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Abréviation <span className="text-red-500">*</span>
+                  </label>
+                  <label className="flex items-center text-sm text-gray-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoGenerateAbreviation}
+                      onChange={(e) => {
+                        setAutoGenerateAbreviation(e.target.checked);
+                        if (e.target.checked && formData.nom) {
+                          handleInputChange('abreviation', generateAbreviation(formData.nom));
+                        }
+                      }}
+                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Auto-générer
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={formData.abreviation}
+                  onChange={(e) => {
+                    setAutoGenerateAbreviation(false); // Désactiver l'auto-génération lors de la saisie manuelle
+                    handleInputChange('abreviation', e.target.value.toUpperCase());
+                  }}
+                  className={`w-full px-4 py-3 border rounded-md focus:ring-2 focus:ring-blue-500 transition-colors ${
+                    errors.abreviation ? 'border-red-300 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+                  }`}
+                  placeholder="Ex: MATH, FR, SCI..."
+                  maxLength={10}
+                />
+                {errors.abreviation && <p className="mt-2 text-sm text-red-600 flex items-center"><span className="mr-1">⚠️</span>{errors.abreviation}</p>}
+                <p className="mt-2 text-xs text-gray-500">
+                  {autoGenerateAbreviation 
+                    ? '✨ Abréviation générée automatiquement à partir du nom'
+                    : 'Abréviation utilisée dans les bulletins (max 10 caractères)'}
+                </p>
+              </div>
             </div>
           </div>
 
