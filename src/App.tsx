@@ -16,6 +16,7 @@ import MatiereForm from './components/Matieres/MatiereForm';
 import NotesParClasse from './components/Notes/NotesParClasse';
 import ConfigMain from './components/Config/ConfigMain';
 import FinancesList from './components/Finances/FinancesList';
+import FichesRecouvrement from './components/Finances/FichesRecouvrement';
 import ComptabiliteList from './components/Comptabilite/ComptabiliteList';
 import Guide from './components/Guide';
 import UserProfile from './components/Layout/UserProfile';
@@ -249,6 +250,8 @@ export default function App() {
         return <UserSettings />;
       case 'finances':
         return <FinancesList />;
+      case 'recouvrement':
+        return <FichesRecouvrement />;
       case 'comptabilite':
         return <ComptabiliteList />;
       case 'eleves':
