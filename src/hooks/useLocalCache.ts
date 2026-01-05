@@ -14,12 +14,12 @@ interface CacheEntry<T> {
  * Hook pour gérer un cache local avec TTL
  * Utile pour mettre en cache des données stables (configurations, frais, etc.)
  * @param key - Clé unique pour le cache
- * @param fetchFn - Fonction pour récupérer les données
+ * @param fetchFn - Fonction pour récupérer les données (peut être sync ou async)
  * @param options - Options de cache (TTL, auto-refresh)
  */
 export function useLocalCache<T>(
   key: string,
-  fetchFn: () => T,
+  fetchFn: () => T | Promise<T>,
   options: CacheOptions = {}
 ) {
   const { ttl = 5 * 60 * 1000, autoRefresh = true } = options; // 5 minutes par défaut
@@ -58,12 +58,12 @@ export function useLocalCache<T>(
     return Date.now() - entry.timestamp < ttl;
   }, [ttl]);
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const freshData = fetchFn();
-      setData(freshData);
-      setCachedData(freshData);
+      const result = await fetchFn();
+      setData(result);
+      setCachedData(result);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));

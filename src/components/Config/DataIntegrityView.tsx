@@ -124,7 +124,7 @@ export default function DataIntegrityView() {
             nombreVersements: 9,
             montantParVersement: 10000,
           };
-          db.add('fraisScolaires', nouveauFrais);
+          db.create('fraisScolaires', nouveauFrais);
           showToast(
             `Configuration de frais créée pour le niveau ${niveau}`,
             'success'

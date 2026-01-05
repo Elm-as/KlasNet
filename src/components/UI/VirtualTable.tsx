@@ -61,16 +61,21 @@ export default function VirtualTable<T extends Record<string, any>>({
     if (typeof column.width === 'number') return column.width;
     if (typeof column.width === 'string') {
       if (column.width.includes('%')) {
-        const percentage = parseFloat(column.width) / 100;
-        return containerWidth * percentage;
+        const percentage = parseFloat(column.width);
+        if (isNaN(percentage)) return containerWidth / columns.length;
+        return containerWidth * (percentage / 100);
       }
-      return parseFloat(column.width);
+      const parsed = parseFloat(column.width);
+      return isNaN(parsed) ? containerWidth / columns.length : parsed;
     }
     // Largeur par défaut: diviser équitablement
     return containerWidth / columns.length;
   };
 
   const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+    // Bounds checking
+    if (index >= data.length) return null;
+    
     const item = data[index];
     const rowClasses =
       typeof rowClassName === 'function' ? rowClassName(item, index) : rowClassName;

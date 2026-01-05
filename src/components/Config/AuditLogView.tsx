@@ -16,6 +16,7 @@ export interface AuditLogEntry {
 
 // Stockage local des logs d'audit
 const AUDIT_LOG_KEY = 'klasnet_audit_logs';
+const MAX_AUDIT_LOGS = 1000; // Nombre maximum de logs à conserver
 
 export class AuditLogger {
   static log(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) {
@@ -27,8 +28,8 @@ export class AuditLogger {
     };
     logs.unshift(newEntry);
     
-    // Garder seulement les 1000 derniers logs
-    const trimmedLogs = logs.slice(0, 1000);
+    // Garder seulement les MAX_AUDIT_LOGS derniers logs
+    const trimmedLogs = logs.slice(0, MAX_AUDIT_LOGS);
     localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(trimmedLogs));
     
     // Dispatch event pour mise à jour en temps réel

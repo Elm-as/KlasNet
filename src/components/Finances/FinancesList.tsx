@@ -80,7 +80,7 @@ export default function FinancesList() {
   // Situation financière calculation removed: we display explicit inscription and versements columns instead
 
   const getSommeParType = (eleveId: string, type?: string) => {
-    const paiementsEleve = paiementsMap.get(eleveId) || [];
+    const paiementsEleve = paiementsMap.get(eleveId) ?? [];
     if (type) {
       return paiementsEleve.filter(p => (p as any).typeFrais === type).reduce((s, p) => s + (p.montant || 0), 0);
     }
@@ -110,7 +110,7 @@ export default function FinancesList() {
   function getSommeParModalite(eleveId: string, modaliteIdx: number) {
     // For modalite 1 we must include explicit 'scolarite' versements with versementIndex=1
     // as well as any payments recorded as type 'inscription'
-    const paiementsEleve = paiementsMap.get(eleveId) || [];
+    const paiementsEleve = paiementsMap.get(eleveId) ?? [];
     if (Number(modaliteIdx) === 1) {
       const sommeInscription = paiementsEleve.filter(p => (p as any).typeFrais === 'inscription').reduce((s, p) => s + (p.montant || 0), 0);
       const sommeVersement1 = paiementsEleve.filter(p => (p as any).typeFrais === 'scolarite' && Number((p as any).versementIndex) === 1).reduce((s, p) => s + (p.montant || 0), 0);
@@ -185,7 +185,8 @@ export default function FinancesList() {
 
   // Supprimer les paiements historiques de montant 0 pour un élève
   function cleanupZeroPayments(eleveId: string) {
-    const zeros = (paiementsMap.get(eleveId) || []).filter(p => Number((p as any).montant || 0) === 0);
+    const elevePayments = paiementsMap.get(eleveId) ?? [];
+    const zeros = elevePayments.filter(p => Number((p as any).montant || 0) === 0);
     if (!zeros.length) {
       showToast('Aucun paiement à 0 FCFA trouvé', 'info');
       return;
