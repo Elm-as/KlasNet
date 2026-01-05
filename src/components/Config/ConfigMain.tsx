@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { db } from '../../utils/database';
-import { Building2, DollarSign, BookOpen, FileText, Database, History, GraduationCap, Shield, ArrowLeft, Upload } from 'lucide-react';
+import { Building2, DollarSign, BookOpen, FileText, Database, History, GraduationCap, Shield, ArrowLeft, Upload, CheckCircle, FileWarning } from 'lucide-react';
 import ConfigEcole from './ConfigEcole';
 import ConfigFraisDetaille from './ConfigFraisDetaille';
 import ConfigCompositions from './ConfigCompositions';
@@ -10,8 +10,10 @@ import HistoriqueList from './HistoriqueList';
 import ConfigLicence from './ConfigLicence';
 import ConfigPassageAnnee from './ConfigPassageAnnee';
 import ConfigImportComplet from './ConfigImportComplet';
+import DataIntegrityView from './DataIntegrityView';
+import AuditLogView from './AuditLogView';
 
-type ConfigSection = 'menu' | 'ecole' | 'frais' | 'compositions' | 'impression' | 'backup' | 'historique' | 'licence' | 'passage' | 'import';
+type ConfigSection = 'menu' | 'ecole' | 'frais' | 'compositions' | 'impression' | 'backup' | 'historique' | 'licence' | 'passage' | 'import' | 'integrity' | 'audit';
 
 const configSections = [
   {
@@ -43,6 +45,18 @@ const configSections = [
     title: 'Importation Complète',
     description: 'Importer élèves, classes et paiements depuis Excel',
     icon: Upload
+  },
+  {
+    id: 'integrity' as ConfigSection,
+    title: 'Intégrité des Données',
+    description: 'Vérifier et corriger les problèmes de données',
+    icon: CheckCircle
+  },
+  {
+    id: 'audit' as ConfigSection,
+    title: 'Journal d\'Audit',
+    description: 'Historique des opérations et traçabilité',
+    icon: FileWarning
   },
   {
     id: 'backup' as ConfigSection,
@@ -85,6 +99,10 @@ export default function ConfigMain() {
         return <ConfigImpression />;
       case 'import':
         return <ConfigImportComplet />;
+      case 'integrity':
+        return <DataIntegrityView />;
+      case 'audit':
+        return <AuditLogView />;
       case 'backup':
         return <ConfigBackup />;
       case 'historique':
