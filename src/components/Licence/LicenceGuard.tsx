@@ -103,8 +103,10 @@ export default function LicenceGuard({ children }: LicenceGuardProps) {
     );
   }
 
-  // If user chose to configure, show the ConfigEcole screen
-  if (showConfig) return <ConfigEcole />;
+  // If user chose to configure, show the ConfigEcole screen with back button
+  if (showConfig) {
+    return <ConfigEcole onBack={() => setShowConfig(false)} />;
+  }
 
   // Interface de blocage pour licence expirée/invalide
   return (
