@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import ModuleContainer from '../Layout/ModuleContainer';
 import Button from '../UI/Button';
 import { passageAnneeScolaire } from '../../utils/passageAnnee';
+import { initializeAcademicHistoryForExistingStudents } from '../../utils/initializeAcademicHistory';
 import { db } from '../../utils/database';
-import { CheckCircle, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, RefreshCw, AlertTriangle, BookOpen } from 'lucide-react';
 
 export default function ConfigPassageAnnee() {
   const [useDfa, setUseDfa] = useState(true);
@@ -48,6 +49,15 @@ export default function ConfigPassageAnnee() {
       setMessage(`Erreur: ${e?.message || String(e)}`);
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const handleInitializeHistory = () => {
+    try {
+      const result = initializeAcademicHistoryForExistingStudents();
+      setMessage(`Initialisation réussie: ${result.created} parcours académiques créés, ${result.skipped} élèves ignorés.`);
+    } catch (e: any) {
+      setMessage(`Erreur lors de l'initialisation: ${e?.message || String(e)}`);
     }
   };
 
@@ -102,6 +112,28 @@ export default function ConfigPassageAnnee() {
   return (
     <ModuleContainer title="Passage d'année scolaire" subtitle="Clôturer l'année actuelle et préparer la nouvelle">
       <div className="space-y-6">
+        {/* Initialize Academic History for Existing Students */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <BookOpen className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-md font-semibold text-blue-900">Initialiser le parcours académique</h3>
+              <p className="text-sm text-blue-700 mt-1">
+                Si vous venez de mettre à jour le système, cliquez ici pour créer automatiquement 
+                les entrées de parcours académique pour tous les élèves actifs de l'année en cours.
+              </p>
+              <Button 
+                onClick={handleInitializeHistory}
+                variant="secondary"
+                className="mt-3"
+              >
+                <BookOpen className="w-4 h-4 mr-2" />
+                Initialiser les parcours académiques
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white p-4 rounded border border-gray-200">
           <div className="flex items-start justify-between">
             <div>
