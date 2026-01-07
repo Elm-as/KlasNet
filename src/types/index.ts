@@ -177,3 +177,19 @@ export interface HistoriqueAction extends BaseEntity {
   utilisateur: string;
   date: string;
 }
+
+// Parcours académique - Historique d'un élève année par année
+export interface ParcoursAcademique extends BaseEntity {
+  eleveId: string;
+  anneeScolaire: string;
+  classeId: string;
+  niveau: string;
+  section: string;
+  statut: 'Admis' | 'Redoublant' | 'Transféré' | 'Abandonné' | 'En cours';
+  moyenneAnnuelle?: number;
+  rang?: number;
+  effectifClasse?: number;
+  observations?: string;
+  dateDebut: string;
+  dateFin?: string;
+}
