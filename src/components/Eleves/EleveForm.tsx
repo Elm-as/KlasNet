@@ -7,6 +7,7 @@ import { Save, X, Upload, User, Calendar, MapPin, Phone, Users } from 'lucide-re
 import { db } from '../../utils/database';
 import { formatNomPrenoms } from '../../utils/formatName';
 import { Eleve, Classe } from '../../types';
+import ParcoursAcademiqueView from './ParcoursAcademiqueView';
 
 interface EleveFormProps {
   eleve?: Eleve | null;
@@ -533,6 +534,17 @@ export default function EleveForm({ eleve, onSave, onCancel }: EleveFormProps) {
             )}
           </div>
           </div>
+
+          {/* Parcours Académique - Show only for existing students */}
+          {eleve && eleve.id && (
+            <div className="bg-gray-50 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Calendar className="h-5 w-5 mr-2" />
+                Parcours Académique
+              </h3>
+              <ParcoursAcademiqueView eleveId={eleve.id} />
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">

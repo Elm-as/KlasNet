@@ -12,6 +12,7 @@ Application web complète de gestion scolaire spécialement conçue pour les éc
 - Recherche et filtrage avancés avec debounce
 - Import/Export Excel optimisé
 - Suivi du statut (Actif, Inactif, Transféré)
+- **📖 Parcours académique détaillé** : Historique année par année avec moyennes, rang, et statut (admis/redoublant)
 
 ### 👨‍🏫 Gestion des Enseignants
 - Profils complets des enseignants
@@ -65,6 +66,16 @@ Application web complète de gestion scolaire spécialement conçue pour les éc
 - Modifications de notes
 - Export en JSON
 - Filtres et recherche avancés
+
+### 🎓 Suivi du Parcours Académique (NOUVEAU)
+- **Historique complet** : Enregistrement automatique de chaque année scolaire
+- **Visualisation chronologique** : Timeline détaillée du parcours de l'élève
+- **Statistiques** : Années au total, promotions, redoublements, moyenne globale
+- **Détails par année** : Classe, niveau, moyenne annuelle, rang, statut (Admis/Redoublant)
+- **Enregistrement automatique** : Lors du passage d'année scolaire avec DFA
+- **Observations personnalisées** : Notes et remarques sur chaque année
+
+Le système crée automatiquement une entrée dans le parcours académique de chaque élève lors du passage d'année, permettant un suivi complet de l'évolution scolaire sur plusieurs années.
 
 ### 🔐 Système de Licence Avancé
 - **Fonctionnement hors ligne** avec vérification locale
@@ -230,6 +241,7 @@ Pour plus de détails, consultez [OPTIMISATION_FRONTEND.md](OPTIMISATION_FRONTEN
 - [x] **Intégrité des données avec détection et correction automatique**
 - [x] **Journal d'audit pour traçabilité complète**
 - [x] **Composants UI réutilisables (skeleton, progress, etc.)**
+- [x] **Suivi du parcours académique avec historique détaillé année par année**
 
 ### 🚧 Modules en Développement
 - [ ] Impression de la liste des notes et moyennes

@@ -1,5 +1,5 @@
 // ...existing code...
-import { Eleve, Ecole, Utilisateur, HistoriqueAction } from '../types';
+import { Eleve, Ecole, Utilisateur, HistoriqueAction, ParcoursAcademique, Classe } from '../types';
 import { getAllEnteteConfig, saveEnteteConfig } from './entetesConfig';
 
 class LocalDatabase {
@@ -26,6 +26,34 @@ class LocalDatabase {
     return newAction;
   }
 
+  // Parcours académique - Créer une entrée d'historique pour un élève
+  addParcoursAcademique(parcours: Omit<ParcoursAcademique, 'id' | 'createdAt' | 'updatedAt'>) {
+    return this.create<ParcoursAcademique>('parcoursAcademiques', parcours);
+  }
+
+  // Obtenir le parcours académique d'un élève
+  getParcoursAcademique(eleveId: string): ParcoursAcademique[] {
+    const allParcours = this.getAll<ParcoursAcademique>('parcoursAcademiques');
+    return allParcours.filter(p => p.eleveId === eleveId).sort((a, b) => {
+      return new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime();
+    });
+  }
+
+  // Mettre à jour le parcours en cours d'un élève
+  updateParcoursEnCours(eleveId: string, anneeScolaire: string, updates: Partial<ParcoursAcademique>) {
+    const allParcours = this.getAll<ParcoursAcademique>('parcoursAcademiques');
+    const parcoursEnCours = allParcours.find(p => 
+      p.eleveId === eleveId && 
+      p.anneeScolaire === anneeScolaire && 
+      p.statut === 'En cours'
+    );
+    
+    if (parcoursEnCours) {
+      return this.update<ParcoursAcademique>('parcoursAcademiques', parcoursEnCours.id, updates);
+    }
+    return null;
+  }
+
   static getInstance(): LocalDatabase {
     if (!LocalDatabase.instance) {
       LocalDatabase.instance = new LocalDatabase();
@@ -38,7 +66,7 @@ class LocalDatabase {
     const collections = [
       'ecole', 'matieres', 'classes', 'enseignants', 'fraisScolaires',
       'eleves', 'paiements', 'notes', 'moyennesGenerales', 'utilisateurs',
-      'compositions', 'historiques', 'compta'
+      'compositions', 'historiques', 'compta', 'parcoursAcademiques'
     ];
     
     collections.forEach(collection => {
@@ -210,7 +238,8 @@ class LocalDatabase {
       'utilisateurs',
       'compositions',
       'historiques',
-      'compta'
+      'compta',
+      'parcoursAcademiques'
     ];
 
   const data: Record<string, unknown> = {};

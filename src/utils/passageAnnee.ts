@@ -1,5 +1,5 @@
 import { db } from './database';
-import { Eleve, Classe, HistoriqueAction, Ecole } from '../types';
+import { Eleve, Classe, HistoriqueAction, Ecole, ParcoursAcademique } from '../types';
 // try to import ensureDefaultFrais helper if present
 let ensureDefaultFrais: ((annee: string) => void) | undefined;
 try {
@@ -19,6 +19,43 @@ export type PassageOptions = {
   resetFinances?: boolean; // si true, supprime/archives paiements
 };
 
+// Helper function to create academic history for the completed year
+function createAcademicHistory(
+  eleve: Eleve, 
+  classeActuelle: Classe, 
+  anneeScolaireFinissante: string,
+  moyenne?: number,
+  statut?: 'Admis' | 'Redoublant' | 'Transféré' | 'Abandonné'
+) {
+  const now = new Date().toISOString();
+  
+  // Close any existing "En cours" entry for this year
+  db.updateParcoursEnCours(eleve.id, anneeScolaireFinissante, {
+    statut: statut || 'Admis',
+    moyenneAnnuelle: moyenne,
+    dateFin: now
+  });
+  
+  // If no entry exists, create one
+  const existingParcours = db.getAll<any>('parcoursAcademiques').filter(
+    p => p.eleveId === eleve.id && p.anneeScolaire === anneeScolaireFinissante
+  );
+  
+  if (existingParcours.length === 0) {
+    db.addParcoursAcademique({
+      eleveId: eleve.id,
+      anneeScolaire: anneeScolaireFinissante,
+      classeId: classeActuelle.id,
+      niveau: classeActuelle.niveau,
+      section: classeActuelle.section || '',
+      statut: statut || 'Admis',
+      moyenneAnnuelle: moyenne,
+      dateDebut: eleve.anneeEntree || anneeScolaireFinissante,
+      dateFin: now
+    });
+  }
+}
+
 export function passageAnneeScolaire(opts: PassageOptions) {
   const {
     useDFA = false,
@@ -34,6 +71,10 @@ export function passageAnneeScolaire(opts: PassageOptions) {
   const classes = db.getAll<Classe>('classes');
   const notes = db.getAll('notes');
   const paiements = db.getAll('paiements');
+  
+  // Determine the current year that's ending (for academic history)
+  const ecole = db.getAll<Ecole>('ecole')[0];
+  const anneeScolaireFinissante = ecole?.anneeScolaireActive || '';
 
   // 1) Archive complète (JSON) et téléchargement
   const archive = {
@@ -112,12 +153,27 @@ export function passageAnneeScolaire(opts: PassageOptions) {
       if (!classeActuelle) return;
       const idx = niveaux.indexOf(classeActuelle.niveau as string);
       if (moyenne >= seuilAdmission) {
+        // Create academic history for completed year (admitted/promoted)
+        createAcademicHistory(eleve, classeActuelle, anneeScolaireFinissante, moyenne, 'Admis');
+        
         // promotion si possible
         if (idx >= 0 && idx < niveaux.length - 1) {
           const niveauSuivant = niveaux[idx + 1];
           const nouvelleClasse = classes.find(c => c.niveau === niveauSuivant && c.section === classeActuelle.section && c.anneeScolaire === nouvelleAnnee);
           if (nouvelleClasse) {
             db.update<Eleve>('eleves', eleve.id, { classeId: nouvelleClasse.id, anneeEntree: nouvelleAnnee });
+            
+            // Create new "En cours" entry for next year
+            db.addParcoursAcademique({
+              eleveId: eleve.id,
+              anneeScolaire: nouvelleAnnee,
+              classeId: nouvelleClasse.id,
+              niveau: nouvelleClasse.niveau,
+              section: nouvelleClasse.section || '',
+              statut: 'En cours',
+              dateDebut: new Date().toISOString()
+            });
+            
             promoted++;
           }
         } else {
@@ -126,8 +182,23 @@ export function passageAnneeScolaire(opts: PassageOptions) {
           promoted++;
         }
       } else {
+        // Create academic history for completed year (held back/redoublant)
+        createAcademicHistory(eleve, classeActuelle, anneeScolaireFinissante, moyenne, 'Redoublant');
+        
         // redoublement -> on garde la même classe mais on peut mettre anneeEntree
   db.update<Eleve>('eleves', eleve.id, { anneeEntree: nouvelleAnnee });
+        
+        // Create new "En cours" entry for repeat year
+        db.addParcoursAcademique({
+          eleveId: eleve.id,
+          anneeScolaire: nouvelleAnnee,
+          classeId: classeActuelle.id,
+          niveau: classeActuelle.niveau,
+          section: classeActuelle.section || '',
+          statut: 'En cours',
+          dateDebut: new Date().toISOString()
+        });
+        
         heldBack++;
       }
     });
@@ -139,7 +210,7 @@ export function passageAnneeScolaire(opts: PassageOptions) {
 
   // Mettre à jour l'année scolaire des classes et ecole
   classes.forEach(classe => { db.update<Classe>('classes', classe.id, { anneeScolaire: nouvelleAnnee }); });
-  const ecole = db.getAll<Ecole>('ecole')[0]; if (ecole) db.update<Ecole>('ecole', ecole.id, { anneeScolaireActive: nouvelleAnnee });
+  if (ecole) db.update<Ecole>('ecole', ecole.id, { anneeScolaireActive: nouvelleAnnee });
 
   if (resetFinances) {
     // archiver puis supprimer paiements
